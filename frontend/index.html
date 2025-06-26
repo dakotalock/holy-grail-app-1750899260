@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EchoBot: Simple Full Stack Chat</title>
+    <!-- Tailwind CSS CDN for utility-first styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for chat messages and scroll behavior */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f2f5; /* Light gray background */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh; /* Ensure full viewport height */
+            margin: 0;
+        }
+
+        #chat-container {
+            /* Basic chat container styling */
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); /* Soft shadow */
+            border-radius: 0.75rem; /* Rounded corners */
+            overflow: hidden; /* Hide overflow for internal elements */
+        }
+
+        #messages-display {
+            /* Message display area styling */
+            height: 400px; /* Fixed height for scrollability */
+            overflow-y: auto; /* Enable vertical scrolling */
+            scroll-behavior: smooth; /* Smooth scrolling */
+            background-color: #ffffff; /* White background for messages */
+            border-bottom: 1px solid #e5e7eb; /* Light border at bottom */
+        }
+
+        /* Styling for user and bot messages */
+        .message {
+            padding: 0.5rem 1rem;
+            margin-bottom: 0.5rem;
+            max-width: 80%; /* Limit message width */
+            border-radius: 0.5rem; /* Rounded corners for messages */
+            word-wrap: break-word; /* Break long words */
+        }
+
+        .user-message {
+            background-color: #dbeafe; /* Light blue for user messages */
+            color: #1e40af; /* Darker blue text */
+            margin-left: auto; /* Align user messages to the right */
+            margin-right: 1rem; /* Spacing from right edge */
+        }
+
+        .bot-message {
+            background-color: #f3f4f6; /* Light gray for bot messages */
+            color: #374151; /* Dark gray text */
+            margin-right: auto; /* Align bot messages to the left */
+            margin-left: 1rem; /* Spacing from left edge */
+        }
+
+        #input-area {
+            /* Input area styling */
+            background-color: #ffffff;
+            border-top: 1px solid #e5e7eb; /* Light border at top */
+        }
+
+        #user-input:focus {
+            outline: none; /* Remove default outline on focus */
+            box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.5); /* Custom focus ring */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+
+    <!-- Main chat container -->
+    <div id="chat-container" class="w-full max-w-lg bg-white rounded-lg shadow-xl flex flex-col h-[600px]">
+        <!-- Chat header -->
+        <div class="bg-blue-600 text-white p-4 rounded-t-lg flex items-center justify-between">
+            <h1 class="text-2xl font-semibold">EchoBot: Simple Full Stack Chat</h1>
+            <span class="text-sm opacity-80">Online</span>
+        </div>
+
+        <!-- Messages display area -->
+        <div id="messages-display" class="flex-grow p-4 space-y-3 overflow-y-auto">
+            <!-- Initial bot message -->
+            <p class="bot-message message">Hello! I'm EchoBot. Type a message and I'll echo it back.</p>
+        </div>
+
+        <!-- Input area -->
+        <div id="input-area" class="p-4 flex items-center border-t border-gray-200">
+            <input type="text" id="user-input" placeholder="Type your message here..."
+                   class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent mr-3 text-gray-800">
+            <button id="send-button"
+                    class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition duration-200 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-opacity-75">
+                Send
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Get references to DOM elements
+        const messagesDisplay = document.getElementById('messages-display');
+        const userInput = document.getElementById('user-input');
+        const sendButton = document.getElementById('send-button');
+
+        // Function to append a message to the display area
+        /**
+         * Appends a new message to the chat display.
+         * @param {string} text - The message text.
+         * @param {'user' | 'bot'} sender - The sender of the message ('user' or 'bot').
+         */
+        const appendMessage = (text, sender) => {
+            const messageElement = document.createElement('p');
+            messageElement.classList.add('message', `${sender}-message`);
+            messageElement.textContent = text;
+            messagesDisplay.appendChild(messageElement);
+            // Scroll to the bottom to show the latest message
+            messagesDisplay.scrollTop = messagesDisplay.scrollHeight;
+        };
+
+        // Function to handle sending a message to the backend
+        const sendMessage = async () => {
+            const userMessage = userInput.value.trim();
+
+            if (!userMessage) {
+                // Do not send empty messages
+                return;
+            }
+
+            // Display user's message immediately
+            appendMessage(userMessage, 'user');
+            userInput.value = ''; // Clear the input field
+
+            // Disable input and button while waiting for response (loading state)
+            userInput.disabled = true;
+            sendButton.disabled = true;
+            sendButton.textContent = 'Sending...';
+
+            try {
+                // IMPORTANT: The fetch URL is relative (/api/chat).
+                // Netlify's proxy rule in `_redirects` will forward this to the Render backend URL.
+                // This avoids hardcoding the Render URL in the frontend and handles CORS.
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ message: userMessage }),
+                });
+
+                if (!response.ok) {
+                    // Handle HTTP errors (e.g., 400, 500)
+                    const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+                    throw new Error(`Server responded with status ${response.status}: ${errorData.message || 'Error processing request.'}`);
+                }
+
+                const data = await response.json();
+                // Display bot's response
+                appendMessage(data.botMessage, 'bot');
+
+            } catch (error) {
+                console.error('Error sending message:', error);
+                // Display an error message in the chat
+                appendMessage(`Error: Could not connect to EchoBot. (${error.message || 'Network error'})`, 'bot');
+            } finally {
+                // Re-enable input and button
+                userInput.disabled = false;
+                sendButton.disabled = false;
+                sendButton.textContent = 'Send';
+                userInput.focus(); // Focus back on the input field
+            }
+        };
+
+        // Event listener for the Send button click
+        sendButton.addEventListener('click', sendMessage);
+
+        // Event listener for Enter key press in the input field
+        userInput.addEventListener('keypress', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault(); // Prevent default form submission if any
+                sendMessage();
+            }
+        });
+
+        // Focus the input field on page load for better UX
+        userInput.focus();
+    </script>
+
+    <div style="position:fixed;bottom:10px;right:10px;background:rgba(0,0,0,0.7);color:white;padding:5px 10px;border-radius:5px;font-family:sans-serif;font-size:12px">
+        Created by Dakota Rain Lock, powered by Holy Grail. A Dakota Rain Lock Invention.
+    </div>
+    
+</body>
+</html>
